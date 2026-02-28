@@ -1,7 +1,7 @@
 .PHONY: run test init-db daily
 
 run:
-	python3 -m src.server
+	python3 -m src.main
 
 test:
 	python3 -m unittest discover -s tests -v

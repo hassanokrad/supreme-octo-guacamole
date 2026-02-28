@@ -1,16 +1,13 @@
-# Autonomous Revenue Starter
+# PulseBoard
 
-A minimal, self-hostable Python project designed to run continuously and monetize via affiliate links with minimal owner interaction.
+A minimal, self-hostable Python service for subscription analytics with Stripe-backed checkout.
 
 ## What it does
 
-- Serves a landing page with curated offers.
-- Tracks page views and affiliate click-throughs in SQLite.
-- Rotates and refreshes offers from a local seed file automatically.
-- Exposes a token-protected admin report endpoint for basic revenue-funnel metrics.
-- Includes CI checks and scripts for unattended operation.
-
-> This is an automation starter, not a guaranteed income machine. Profit depends on traffic and offer quality.
+- Serves core API endpoints for health, signup, checkout, premium access, and reporting.
+- Persists user, checkout, payment, and analytics data in SQLite.
+- Verifies Stripe webhooks and updates paid subscription state.
+- Includes lightweight scripts for initialization, operations checks, and daily automation.
 
 ## Quickstart
 
@@ -19,33 +16,38 @@ make init-db
 make run
 ```
 
----
+## Architecture
 
-Copy `.env.example` to `.env` and edit values.
+PulseBoard is standardized on a single server implementation:
+
+- **Canonical app module:** `src/main.py`
+- **Config module:** `src/config.py`
+- **Persistence module:** `src/store.py`
+- **Legacy compatibility wrappers:** `src/server.py` and `src/app/*` (deprecated)
 
 ```text
 src/
-  main.py          # app entrypoint + HTTP routes
+  main.py          # canonical app entrypoint + HTTP routes
   config.py        # env/config loading
   store.py         # sqlite persistence layer
-  app/             # compatibility package
+  server.py        # deprecated compatibility entrypoint
+  app/             # deprecated compatibility wrappers
 scripts/ops/
   *.py|*.sh        # monitoring, backup, KPI, growth, notifications
-.github/workflows/
-  ci.yml           # lint + test + docker build
-  cd.yml           # deploy on main after CI succeeds
-  operations.yml   # monitoring + backups + growth + KPI schedules
-docs/runbooks/
-  *.md             # incident, deployment, and backup runbooks
 ```
 
 ## Endpoints
 
-- `GET /` landing page
-- `GET /health` health check
-- `GET /go/<offer_id>` tracked redirect to affiliate URL
-- `POST /automation/refresh?token=<ADMIN_TOKEN>` refreshes offers from seed file
-- `GET /admin/report?token=<ADMIN_TOKEN>` funnel report (views/clicks/CTR)
+| Method | Path | Description |
+|---|---|---|
+| GET | `/` | Service metadata and root hit counter |
+| GET | `/health` | Health check and environment |
+| GET | `/pricing` | Subscription pricing page |
+| POST | `/signup` | Create/update user by email |
+| POST | `/checkout/session` | Create Stripe checkout session |
+| POST | `/webhooks/stripe` | Process Stripe webhook events |
+| GET | `/premium?email=<email>` | Premium feature access gate |
+| GET | `/admin/report` | Funnel + revenue summary |
 
 ## CI/CD
 
