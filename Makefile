@@ -1,18 +1,13 @@
-PYTHON ?= python3
-
-.PHONY: install run test lint build
-
-install:
-	$(PYTHON) -m pip install --upgrade pip
+.PHONY: run test init-db daily
 
 run:
-	PYTHONPATH=src $(PYTHON) src/main.py
+	python3 -m src.server
 
 test:
-	PYTHONPATH=src $(PYTHON) -m unittest discover -s tests -v
+	python3 -m unittest discover -s tests -v
 
-lint:
-	$(PYTHON) -m py_compile src/*.py src/app/*.py tests/*.py
+init-db:
+	python3 scripts/run_daily.py
 
-build:
-	docker build -t pulseboard:local .
+daily:
+	python3 scripts/run_daily.py

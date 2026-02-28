@@ -1,0 +1,20 @@
+[
+  {
+    "id": "hosting-pro",
+    "title": "Managed Hosting Pro",
+    "description": "High-performance hosting for small businesses.",
+    "affiliate_url": "https://example.com/affiliate/hosting-pro"
+  },
+  {
+    "id": "email-suite",
+    "title": "Email Suite Plus",
+    "description": "Marketing automation for growing teams.",
+    "affiliate_url": "https://example.com/affiliate/email-suite"
+  },
+  {
+    "id": "analytics-ai",
+    "title": "Analytics AI",
+    "description": "Automated reporting and insights for ecommerce.",
+    "affiliate_url": "https://example.com/affiliate/analytics-ai"
+  }
+]

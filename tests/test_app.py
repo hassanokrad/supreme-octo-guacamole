@@ -1,9 +1,10 @@
 import json
+import tempfile
 import threading
 import time
 import unittest
-from http.client import HTTPConnection
 from pathlib import Path
+from urllib.request import HTTPErrorProcessor, build_opener, urlopen
 
 import main
 from config import settings
@@ -23,7 +24,14 @@ class FakeStripeGateway:
         return json.loads(raw_body.decode("utf-8"))
 
 
-class AppTestCase(unittest.TestCase):
+class NoRedirect(HTTPErrorProcessor):
+    def http_response(self, request, response):
+        return response
+
+    https_response = http_response
+
+
+class AppTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         db_path = Path(settings.database_url)
@@ -32,24 +40,27 @@ class AppTestCase(unittest.TestCase):
         init_db()
         main.stripe_gateway = FakeStripeGateway()
 
-        cls.server = ThreadingHTTPServer(("127.0.0.1", 18080), RequestHandler)
+        cls.config = AppConfig()
+        cls.config.host = "127.0.0.1"
+        cls.config.port = 18080
+        cls.config.db_path = data / "app.db"
+        cls.config.admin_token = "test-token"
+        cls.config.seed_path = data / "offers_seed.json"
+        cls.config.site_title = "Test Site"
+
+        cls.server = build_server(cls.config)
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
         time.sleep(0.1)
 
     @classmethod
-    def tearDownClass(cls) -> None:
+    def tearDownClass(cls):
         cls.server.shutdown()
-        cls.server.server_close()
+        cls.tmp.cleanup()
 
-    def test_health(self) -> None:
-        conn = HTTPConnection("127.0.0.1", 18080)
-        conn.request("GET", "/health")
-        response = conn.getresponse()
-        payload = json.loads(response.read().decode("utf-8"))
-
-        self.assertEqual(response.status, 200)
-        self.assertEqual(payload["status"], "ok")
+    def test_health(self):
+        body = urlopen("http://127.0.0.1:18080/health").read().decode()
+        self.assertIn("ok", body)
 
     def test_subscription_checkout_and_premium_gate(self) -> None:
         conn = HTTPConnection("127.0.0.1", 18080)

@@ -1,25 +1,27 @@
-# PulseBoard — Product Spec & Runbook
+# Autonomous Revenue Starter
 
-## One-page product scope
-**Product type:** API SaaS (usage analytics micro-service).
+A minimal, self-hostable Python project designed to run continuously and monetize via affiliate links with minimal owner interaction.
 
-**Problem:** Small product teams need a dead-simple endpoint they can call to track hits without integrating a full analytics suite.
+## What it does
 
-**Target users:** Indie hackers, early-stage SaaS teams, internal tools teams.
+- Serves a landing page with curated offers.
+- Tracks page views and affiliate click-throughs in SQLite.
+- Rotates and refreshes offers from a local seed file automatically.
+- Exposes a token-protected admin report endpoint for basic revenue-funnel metrics.
+- Includes CI checks and scripts for unattended operation.
 
-**Core value proposition:** A tiny HTTP API that records events and returns a live counter with near-zero setup.
+> This is an automation starter, not a guaranteed income machine. Profit depends on traffic and offer quality.
 
-**MVP features (this repo):**
-1. `GET /health` for uptime checks.
-2. `GET /` returns service metadata and increments a persisted request counter.
-3. SQLite persistence so data survives process restarts.
-4. `.env`-driven config for local + container deployments.
+## Quickstart
 
-**Out of scope (future):** Multi-tenant API keys, per-route metrics, dashboard UI, billing, and retention policies.
+```bash
+make init-db
+make run
+```
 
 ---
 
-## Project structure
+Copy `.env.example` to `.env` and edit values.
 
 ```text
 src/
@@ -37,19 +39,13 @@ docs/runbooks/
   *.md             # incident, deployment, and backup runbooks
 ```
 
-## Run locally
+## Endpoints
 
-1. Create env file:
-   ```bash
-   cp .env.example .env
-   ```
-2. Start app:
-   ```bash
-   make run
-   ```
-3. Verify endpoints:
-   - `http://127.0.0.1:8000/health`
-   - `http://127.0.0.1:8000/`
+- `GET /` landing page
+- `GET /health` health check
+- `GET /go/<offer_id>` tracked redirect to affiliate URL
+- `POST /automation/refresh?token=<ADMIN_TOKEN>` refreshes offers from seed file
+- `GET /admin/report?token=<ADMIN_TOKEN>` funnel report (views/clicks/CTR)
 
 ## CI/CD
 
