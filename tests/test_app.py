@@ -37,7 +37,10 @@ class AppTests(unittest.TestCase):
         cls.config.seed_path = seed_path
         cls.config.site_title = "Test Site"
 
-        cls.server = build_server(cls.config)
+        store.init_db()
+        main.stripe_gateway = FakeStripeGateway()
+
+        cls.server = ThreadingHTTPServer(("127.0.0.1", 18080), RequestHandler)
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
         time.sleep(0.1)
@@ -78,7 +81,7 @@ class AppTests(unittest.TestCase):
         self.assertEqual(response.status, 302)
         self.assertEqual(response.headers.get("Location"), "https://example.com/deal")
 
-    def test_admin_report_has_metrics(self) -> None:
+    def test_admin_report_requires_valid_token(self) -> None:
         conn = HTTPConnection("127.0.0.1", 18080)
 
         conn.request("GET", "/")

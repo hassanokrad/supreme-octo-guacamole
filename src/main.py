@@ -90,6 +90,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             )
             return
         if parsed.path == "/admin/report":
+            token = parse_qs(parsed.query).get("token", [""])[0]
+            if token != settings.admin_token:
+                self._send_json({"error": "unauthorized"}, status=HTTPStatus.UNAUTHORIZED)
+                return
             self._send_json(admin_report())
             return
 
