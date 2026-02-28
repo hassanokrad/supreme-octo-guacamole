@@ -1,52 +1,71 @@
 import json
+import tempfile
 import threading
 import time
 import unittest
-from http.client import HTTPConnection
 from pathlib import Path
+from urllib.request import HTTPErrorProcessor, build_opener, urlopen
 
-from config import settings
-from main import RequestHandler
-from store import init_db
-from http.server import ThreadingHTTPServer
+from src.server import AppConfig, build_server
 
 
-class AppTestCase(unittest.TestCase):
+class NoRedirect(HTTPErrorProcessor):
+    def http_response(self, request, response):
+        return response
+
+    https_response = http_response
+
+
+class AppTests(unittest.TestCase):
     @classmethod
-    def setUpClass(cls) -> None:
-        db_path = Path(settings.database_url)
-        if db_path.exists():
-            db_path.unlink()
-        init_db()
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        root = Path(cls.tmp.name)
+        data = root / "data"
+        data.mkdir()
+        (data / "offers_seed.json").write_text(
+            json.dumps([
+                {
+                    "id": "demo",
+                    "title": "Demo Offer",
+                    "description": "Great deal",
+                    "affiliate_url": "https://example.com/demo",
+                }
+            ])
+        )
 
-        cls.server = ThreadingHTTPServer(("127.0.0.1", 18080), RequestHandler)
+        cls.config = AppConfig()
+        cls.config.host = "127.0.0.1"
+        cls.config.port = 18080
+        cls.config.db_path = data / "app.db"
+        cls.config.admin_token = "test-token"
+        cls.config.seed_path = data / "offers_seed.json"
+        cls.config.site_title = "Test Site"
+
+        cls.server = build_server(cls.config)
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
         time.sleep(0.1)
 
     @classmethod
-    def tearDownClass(cls) -> None:
+    def tearDownClass(cls):
         cls.server.shutdown()
-        cls.server.server_close()
+        cls.tmp.cleanup()
 
-    def test_health(self) -> None:
-        conn = HTTPConnection("127.0.0.1", 18080)
-        conn.request("GET", "/health")
-        response = conn.getresponse()
-        payload = json.loads(response.read().decode("utf-8"))
+    def test_health(self):
+        body = urlopen("http://127.0.0.1:18080/health").read().decode()
+        self.assertIn("ok", body)
 
-        self.assertEqual(response.status, 200)
-        self.assertEqual(payload["status"], "ok")
+    def test_report_and_redirect(self):
+        urlopen("http://127.0.0.1:18080/")
 
-    def test_root_counter_increments(self) -> None:
-        conn = HTTPConnection("127.0.0.1", 18080)
-        conn.request("GET", "/")
-        first = json.loads(conn.getresponse().read().decode("utf-8"))
+        resp = urlopen("http://127.0.0.1:18080/admin/report?token=test-token")
+        report = json.loads(resp.read().decode())
+        self.assertGreaterEqual(report["views"], 1)
 
-        conn.request("GET", "/")
-        second = json.loads(conn.getresponse().read().decode("utf-8"))
-
-        self.assertEqual(second["root_hits"], first["root_hits"] + 1)
+        opener = build_opener(NoRedirect)
+        redirect_resp = opener.open("http://127.0.0.1:18080/go/demo")
+        self.assertEqual(redirect_resp.status, 302)
 
 
 if __name__ == "__main__":
