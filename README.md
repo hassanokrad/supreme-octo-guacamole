@@ -17,11 +17,6 @@
 
 **Out of scope (future):** Multi-tenant API keys, per-route metrics, dashboard UI, billing, and retention policies.
 
-**Success criteria (MVP):**
-- Runs locally in <5 minutes.
-- Deployable as a container.
-- CI validates lint + tests + build on every push.
-
 ---
 
 ## Project structure
@@ -32,12 +27,14 @@ src/
   config.py        # env/config loading
   store.py         # sqlite persistence layer
   app/             # compatibility package
-tests/
-  test_app.py      # endpoint and counter tests
-infra/
-  docker-compose.prod.yml
+scripts/ops/
+  *.py|*.sh        # monitoring, backup, KPI, growth, notifications
 .github/workflows/
   ci.yml           # lint + test + docker build
+  cd.yml           # deploy on main after CI succeeds
+  operations.yml   # monitoring + backups + growth + KPI schedules
+docs/runbooks/
+  *.md             # incident, deployment, and backup runbooks
 ```
 
 ## Run locally
@@ -54,24 +51,35 @@ infra/
    - `http://127.0.0.1:8000/health`
    - `http://127.0.0.1:8000/`
 
-## Deploy
+## CI/CD
 
-### Option A: Docker
+- **CI (`.github/workflows/ci.yml`)** runs lint, unit tests, and container build.
+- **CD (`.github/workflows/cd.yml`)** triggers automatically when CI succeeds on `main`, then:
+  1. Builds + pushes `ghcr.io/<org>/pulseboard` image tags (`latest` + commit SHA).
+  2. Deploys to production host over SSH using Compose.
+  3. Runs health verification.
 
-```bash
-docker build -t pulseboard:latest .
-docker run --rm -p 8000:8000 --env-file .env pulseboard:latest
-```
+Required repository/environment secrets:
+- `PROD_SSH_HOST`, `PROD_SSH_USER`, `PROD_SSH_KEY`
+- `PROD_HEALTHCHECK_URL`
 
-### Option B: Docker Compose
+## Production monitoring + operations
 
-```bash
-docker compose -f infra/docker-compose.prod.yml up --build -d
-```
+`operations.yml` drives automation for:
+- **Uptime checks** every 5 minutes.
+- **Error tracking checks** every 5 minutes.
+- **Resource alerts** (CPU/memory/disk) hourly.
+- **Backups + restore validation** daily.
+- **Growth/revenue jobs** (content publishing, email campaign, lead follow-up) weekdays.
+- **Monthly KPI report** for revenue, churn, and funnel metrics.
 
-## CI behavior
+Notification fan-out is handled by `scripts/ops/notify.py` and supports:
+- Slack (`SLACK_WEBHOOK_URL`)
+- PagerDuty (`PAGERDUTY_ROUTING_KEY`)
+- SMTP email (`SMTP_*`, `ALERT_EMAIL_FROM`, `ALERT_EMAIL_TO`)
 
-On each push, GitHub Actions runs:
-1. Lint (`py_compile` syntax check)
-2. Tests (`unittest`)
-3. Docker image build
+## Runbooks
+
+- Incident response: `docs/runbooks/incident-response.md`
+- Deployment: `docs/runbooks/deployment.md`
+- Backup and restore: `docs/runbooks/backups.md`

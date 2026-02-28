@@ -1,0 +1,113 @@
+name: Operations Automation
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # uptime + error checks
+    - cron: "15 * * * *"    # resource alerts
+    - cron: "0 2 * * *"     # backup + restore validation
+    - cron: "0 14 * * 1-5"  # weekday growth tasks
+    - cron: "0 9 1 * *"     # monthly KPI report
+  workflow_dispatch:
+
+jobs:
+  monitoring:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '*/5 * * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Uptime check
+        run: python scripts/ops/uptime_check.py
+        env:
+          HEALTHCHECK_URL: ${{ secrets.PROD_HEALTHCHECK_URL }}
+      - name: Error tracking check
+        run: python scripts/ops/error_tracker.py
+        env:
+          ERROR_LOG_URL: ${{ secrets.ERROR_LOG_URL }}
+          ERROR_RATE_THRESHOLD: ${{ vars.ERROR_RATE_THRESHOLD }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PAGERDUTY_ROUTING_KEY: ${{ secrets.PAGERDUTY_ROUTING_KEY }}
+
+  resource-alerts:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '15 * * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resource monitor
+        run: python scripts/ops/resource_alerts.py
+        env:
+          CPU_THRESHOLD: ${{ vars.CPU_THRESHOLD }}
+          MEMORY_THRESHOLD: ${{ vars.MEMORY_THRESHOLD }}
+          DISK_THRESHOLD: ${{ vars.DISK_THRESHOLD }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+
+  backup-and-restore:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 2 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run backup
+        run: bash scripts/ops/backup_db.sh
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_DIR: backups
+      - name: Restore validation
+        run: bash scripts/ops/restore_validate.sh
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_DIR: backups
+      - name: Upload backup artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-backup
+          path: backups/
+
+  growth-jobs:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 14 * * 1-5'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run growth/revenue tasks
+        run: python scripts/ops/growth_tasks.py
+        env:
+          CONTENT_PUBLISH_WEBHOOK: ${{ secrets.CONTENT_PUBLISH_WEBHOOK }}
+          EMAIL_CAMPAIGN_WEBHOOK: ${{ secrets.EMAIL_CAMPAIGN_WEBHOOK }}
+          LEAD_FOLLOWUP_WEBHOOK: ${{ secrets.LEAD_FOLLOWUP_WEBHOOK }}
+
+  monthly-kpi:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 9 1 * *'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Generate KPI report
+        run: python scripts/ops/kpi_report.py --db-path "${{ secrets.DATABASE_URL }}" --output kpi-report.md
+      - name: Upload KPI report
+        uses: actions/upload-artifact@v4
+        with:
+          name: monthly-kpi-report
+          path: kpi-report.md
+      - name: Notify incidents/reporting channel
+        run: python scripts/ops/notify.py
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          NOTIFICATION_TEXT: "Monthly KPI report generated and uploaded as workflow artifact."
