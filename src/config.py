@@ -9,6 +9,11 @@ class Settings:
     host: str
     port: int
     database_url: str
+    stripe_api_key: str
+    stripe_webhook_secret: str
+    stripe_price_id: str
+    app_base_url: str
+    subscription_amount_cents: int
 
 
 DEFAULTS = {
@@ -17,6 +22,11 @@ DEFAULTS = {
     "HOST": "0.0.0.0",
     "PORT": "8000",
     "DATABASE_URL": "./data/pulseboard.db",
+    "STRIPE_API_KEY": "",
+    "STRIPE_WEBHOOK_SECRET": "",
+    "STRIPE_PRICE_ID": "price_pulseboard_pro_monthly",
+    "APP_BASE_URL": "http://127.0.0.1:8000",
+    "SUBSCRIPTION_AMOUNT_CENTS": "1900",
 }
 
 
@@ -43,6 +53,11 @@ def load_settings() -> Settings:
         host=env_values["HOST"],
         port=int(env_values["PORT"]),
         database_url=env_values["DATABASE_URL"],
+        stripe_api_key=env_values["STRIPE_API_KEY"],
+        stripe_webhook_secret=env_values["STRIPE_WEBHOOK_SECRET"],
+        stripe_price_id=env_values["STRIPE_PRICE_ID"],
+        app_base_url=env_values["APP_BASE_URL"],
+        subscription_amount_cents=int(env_values["SUBSCRIPTION_AMOUNT_CENTS"]),
     )
 
 
