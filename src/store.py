@@ -3,7 +3,7 @@ import sqlite3
 import time
 from pathlib import Path
 
-from config import settings
+from src.config import settings
 
 
 def _db_path() -> Path:

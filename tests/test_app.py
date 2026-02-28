@@ -5,16 +5,8 @@ import time
 import unittest
 from http.client import HTTPConnection
 from pathlib import Path
-from urllib.request import HTTPErrorProcessor, build_opener, urlopen
 
 from server import AppConfig, build_server
-
-
-class NoRedirect(HTTPErrorProcessor):
-    def http_response(self, request, response):
-        return response
-
-    https_response = http_response
 
 
 class AppTests(unittest.TestCase):
@@ -51,13 +43,21 @@ class AppTests(unittest.TestCase):
         time.sleep(0.1)
 
     @classmethod
-    def tearDownClass(cls):
+    def tearDownClass(cls) -> None:
         cls.server.shutdown()
+        cls.thread.join(timeout=1)
+        object.__setattr__(settings, "database_url", cls.original_db_url)
         cls.tmp.cleanup()
 
-    def test_health(self):
-        body = urlopen("http://127.0.0.1:18080/health").read().decode()
-        self.assertIn("ok", body)
+    def test_health(self) -> None:
+        conn = HTTPConnection("127.0.0.1", 18080)
+        conn.request("GET", "/health")
+        response = conn.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["status"], "ok")
+        self.assertIn("environment", payload)
 
     def test_refresh_and_offer_redirect(self) -> None:
         conn = HTTPConnection("127.0.0.1", 18080)
