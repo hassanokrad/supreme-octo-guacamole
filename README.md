@@ -19,15 +19,25 @@ make init-db
 make run
 ```
 
-Open `http://localhost:8080`.
-
-## Configuration
+---
 
 Copy `.env.example` to `.env` and edit values.
 
-- `HOST` / `PORT`: bind settings.
-- `ADMIN_TOKEN`: required to access automation and reporting endpoints.
-- `SITE_TITLE`: site heading.
+```text
+src/
+  main.py          # app entrypoint + HTTP routes
+  config.py        # env/config loading
+  store.py         # sqlite persistence layer
+  app/             # compatibility package
+scripts/ops/
+  *.py|*.sh        # monitoring, backup, KPI, growth, notifications
+.github/workflows/
+  ci.yml           # lint + test + docker build
+  cd.yml           # deploy on main after CI succeeds
+  operations.yml   # monitoring + backups + growth + KPI schedules
+docs/runbooks/
+  *.md             # incident, deployment, and backup runbooks
+```
 
 ## Endpoints
 
@@ -37,22 +47,35 @@ Copy `.env.example` to `.env` and edit values.
 - `POST /automation/refresh?token=<ADMIN_TOKEN>` refreshes offers from seed file
 - `GET /admin/report?token=<ADMIN_TOKEN>` funnel report (views/clicks/CTR)
 
-## Automation
+## CI/CD
 
-Daily refresh and metrics task:
+- **CI (`.github/workflows/ci.yml`)** runs lint, unit tests, and container build.
+- **CD (`.github/workflows/cd.yml`)** triggers automatically when CI succeeds on `main`, then:
+  1. Builds + pushes `ghcr.io/<org>/pulseboard` image tags (`latest` + commit SHA).
+  2. Deploys to production host over SSH using Compose.
+  3. Runs health verification.
 
-```bash
-make daily
-```
+Required repository/environment secrets:
+- `PROD_SSH_HOST`, `PROD_SSH_USER`, `PROD_SSH_KEY`
+- `PROD_HEALTHCHECK_URL`
 
-For unattended operation, schedule:
+## Production monitoring + operations
 
-```cron
-0 4 * * * cd /path/to/repo && /usr/bin/make daily >> /var/log/autonomous-revenue.log 2>&1
-```
+`operations.yml` drives automation for:
+- **Uptime checks** every 5 minutes.
+- **Error tracking checks** every 5 minutes.
+- **Resource alerts** (CPU/memory/disk) hourly.
+- **Backups + restore validation** daily.
+- **Growth/revenue jobs** (content publishing, email campaign, lead follow-up) weekdays.
+- **Monthly KPI report** for revenue, churn, and funnel metrics.
 
-## Testing
+Notification fan-out is handled by `scripts/ops/notify.py` and supports:
+- Slack (`SLACK_WEBHOOK_URL`)
+- PagerDuty (`PAGERDUTY_ROUTING_KEY`)
+- SMTP email (`SMTP_*`, `ALERT_EMAIL_FROM`, `ALERT_EMAIL_TO`)
 
-```bash
-make test
-```
+## Runbooks
+
+- Incident response: `docs/runbooks/incident-response.md`
+- Deployment: `docs/runbooks/deployment.md`
+- Backup and restore: `docs/runbooks/backups.md`
