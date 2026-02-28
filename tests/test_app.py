@@ -3,14 +3,16 @@ import tempfile
 import threading
 import time
 import unittest
+from dataclasses import replace
+from http.client import HTTPConnection
 from pathlib import Path
-from urllib.request import HTTPErrorProcessor, build_opener, urlopen
 
+import config
 import main
-from config import settings
+import store
+from config import Settings
 from http.server import ThreadingHTTPServer
 from main import RequestHandler
-from store import init_db
 
 
 class FakeStripeGateway:
@@ -24,31 +26,21 @@ class FakeStripeGateway:
         return json.loads(raw_body.decode("utf-8"))
 
 
-class NoRedirect(HTTPErrorProcessor):
-    def http_response(self, request, response):
-        return response
-
-    https_response = http_response
-
-
 class AppTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        db_path = Path(settings.database_url)
-        if db_path.exists():
-            db_path.unlink()
-        init_db()
+        cls.tmp = tempfile.TemporaryDirectory()
+        db_path = Path(cls.tmp.name) / "test.db"
+
+        test_settings: Settings = replace(config.settings, database_url=str(db_path), admin_token="test-token")
+        config.settings = test_settings
+        main.settings = test_settings
+        store.settings = test_settings
+
+        store.init_db()
         main.stripe_gateway = FakeStripeGateway()
 
-        cls.config = AppConfig()
-        cls.config.host = "127.0.0.1"
-        cls.config.port = 18080
-        cls.config.db_path = data / "app.db"
-        cls.config.admin_token = "test-token"
-        cls.config.seed_path = data / "offers_seed.json"
-        cls.config.site_title = "Test Site"
-
-        cls.server = build_server(cls.config)
+        cls.server = ThreadingHTTPServer(("127.0.0.1", 18080), RequestHandler)
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
         time.sleep(0.1)
@@ -56,10 +48,15 @@ class AppTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.server.shutdown()
+        cls.server.server_close()
         cls.tmp.cleanup()
 
     def test_health(self):
-        body = urlopen("http://127.0.0.1:18080/health").read().decode()
+        conn = HTTPConnection("127.0.0.1", 18080)
+        conn.request("GET", "/health")
+        response = conn.getresponse()
+        body = response.read().decode("utf-8")
+        self.assertEqual(response.status, 200)
         self.assertIn("ok", body)
 
     def test_subscription_checkout_and_premium_gate(self) -> None:
@@ -118,16 +115,29 @@ class AppTests(unittest.TestCase):
         payload = json.loads(allowed.read().decode("utf-8"))
         self.assertEqual(payload["feature"], "cohort-retention-insights")
 
-    def test_admin_report_has_metrics(self) -> None:
+    def test_admin_report_requires_valid_token(self) -> None:
         conn = HTTPConnection("127.0.0.1", 18080)
+
+        conn.request("GET", "/admin/report")
+        missing_token = conn.getresponse()
+        missing_payload = json.loads(missing_token.read().decode("utf-8"))
+        self.assertEqual(missing_token.status, 401)
+        self.assertEqual(missing_payload["error"], "unauthorized")
+
+        conn.request("GET", "/admin/report?token=wrong-token")
+        invalid_token = conn.getresponse()
+        invalid_payload = json.loads(invalid_token.read().decode("utf-8"))
+        self.assertEqual(invalid_token.status, 401)
+        self.assertEqual(invalid_payload["error"], "unauthorized")
+
         conn.request("GET", "/")
         conn.getresponse().read()
 
-        conn.request("GET", "/admin/report")
-        response = conn.getresponse()
-        payload = json.loads(response.read().decode("utf-8"))
+        conn.request("GET", "/admin/report?token=test-token")
+        authorized = conn.getresponse()
+        payload = json.loads(authorized.read().decode("utf-8"))
 
-        self.assertEqual(response.status, 200)
+        self.assertEqual(authorized.status, 200)
         self.assertIn("visits", payload)
         self.assertIn("signup_conversion", payload)
         self.assertIn("mrr_cents", payload)

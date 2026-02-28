@@ -45,7 +45,8 @@ docs/runbooks/
 - `GET /health` health check
 - `GET /go/<offer_id>` tracked redirect to affiliate URL
 - `POST /automation/refresh?token=<ADMIN_TOKEN>` refreshes offers from seed file
-- `GET /admin/report?token=<ADMIN_TOKEN>` funnel report (views/clicks/CTR)
+- `GET /admin/report?token=<ADMIN_TOKEN>` funnel report (`200 OK` with metrics JSON)
+  - Missing or invalid `token` query value returns `401 Unauthorized` with `{"error":"unauthorized"}`.
 
 ## CI/CD
 

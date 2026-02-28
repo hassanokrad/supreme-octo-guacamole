@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,6 +15,7 @@ class Settings:
     stripe_price_id: str
     app_base_url: str
     subscription_amount_cents: int
+    admin_token: str
 
 
 DEFAULTS = {
@@ -27,6 +29,7 @@ DEFAULTS = {
     "STRIPE_PRICE_ID": "price_pulseboard_pro_monthly",
     "APP_BASE_URL": "http://127.0.0.1:8000",
     "SUBSCRIPTION_AMOUNT_CENTS": "1900",
+    "ADMIN_TOKEN": "change-me",
 }
 
 
@@ -46,7 +49,7 @@ def _read_env_file(env_path: str = ".env") -> dict[str, str]:
 
 
 def load_settings() -> Settings:
-    env_values = {**DEFAULTS, **_read_env_file()}
+    env_values = {**DEFAULTS, **_read_env_file(), **os.environ}
     return Settings(
         app_name=env_values["APP_NAME"],
         app_env=env_values["APP_ENV"],
@@ -58,6 +61,7 @@ def load_settings() -> Settings:
         stripe_price_id=env_values["STRIPE_PRICE_ID"],
         app_base_url=env_values["APP_BASE_URL"],
         subscription_amount_cents=int(env_values["SUBSCRIPTION_AMOUNT_CENTS"]),
+        admin_token=env_values["ADMIN_TOKEN"],
     )
 
 
